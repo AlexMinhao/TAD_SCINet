@@ -413,7 +413,7 @@ if __name__ == "__main__":
     # 'machine-1-1'
     args.dataset = 'gesture'
     # chfdb_chf13_45590
-    subdataset = 'None'
+    subdataset = '1'
     data_dict = load_dataset(args.dataset, subdataset='chfdb_chf01_275_new', use_dim="all", root_dir="/", nrows=None)
 
     args.save_path = 'Gesture_Results'
@@ -422,7 +422,7 @@ if __name__ == "__main__":
 
     args.slide_win = 128
     args.slide_stride = 2
-    args.hidden_size = 8
+    args.hidden_size = 16
     args.batch = 32
     args.pred_len = 32
     args.seq_mask_range_low = 4
@@ -484,9 +484,10 @@ if __name__ == "__main__":
 
 
 
+    # model_load_path = f'{dir_path}/{subdataset}/{args.variate_index}dim/' \
+    #                   f'gesture_BiSeqMask_Pretrain2Stack_2dimNew_group1_lradj3_128_h8_bt16_p32_08_18_181531.pt'
     model_load_path = f'{dir_path}/{subdataset}/{args.variate_index}dim/' \
-                      f'gesture_BiSeqMask_Pretrain2Stack_2dimNew_group1_lradj3_128_h8_bt16_p32_08_18_181531.pt'
-
+                      f'gesture_BiSeqMask_Pretrain2Stack_2dimNew_group1_lradj3_128_h16_bt16_p32_08_18_212624.pt' #F1 score: 0.6056701030927836
     print(model_load_path)
     model.load_state_dict(torch.load(model_load_path))
     best_model = model.to(args.device)
@@ -509,11 +510,11 @@ if __name__ == "__main__":
 #################################################################################################
     Stride = int(args.slide_win / 4)   # Init F1 score: 0.6835555555555555,Threshods: 3.5172821458808468
     ActiveWindow = args.slide_win      # finture Initial F1 score: 0.6944721299135557
-    find_threshold = False
-    variate_num = [0, 1]
+    find_threshold = False              # Init F1 score: 0.6934174932371505,Threshods: 3.4998771603924057
+    variate_num = [0, 1]                # finture Initial F1 score: 0.7658707581885638  precision: 0.961352641524112  recall: 0.6364605475857085
     number = data_dict['test_labels'].shape[0]
     count = -1
-    threshod = 3.5172  # 0.3
+    threshod = 3.4998  # 0.3
     threshod_l1 = 0.1
     NewLabels = np.zeros(number)
     TotalLabels = data_dict['test_labels']
@@ -655,6 +656,7 @@ if __name__ == "__main__":
                             pos = pos_exit[0]
                             for p in range(pos):
                                 NewLabels[End - ActiveWindow - p:End] = 0
+                                print("Error Exit Position：{0}".format(End - ActiveWindow - p))
 
                         enter = False
                 else:
@@ -662,11 +664,11 @@ if __name__ == "__main__":
                 # threshod = dist_ts
     if find_threshold:
         get_dtw(ERRORS, data_dict['test_labels'], 44900, interval=32)
-    # plt.plot(ERRORS, color='r')
+    plt.plot(ERRORS, color='r')
+    plt.plot(NewLabels * 1.2, '.')
+    plt.plot(TotalLabels, '.')
+    plt.show()
 
-    # plt.show()
-    # NewLabels = np.zeros(number)
-    # NewLabels[352:544] = 1
     f1, precision, recall, TP, TN, FP, FN = calc_point2point(NewLabels, TotalLabels)
 
     print(f'Initial F1 score: {f1}')
@@ -684,7 +686,6 @@ if __name__ == "__main__":
     print(f'Adjusted precision: {precision}')
     print(f'Adjusted recall: {recall}\n')
     plt.plot(predict * 1.3, '.')
-    plt.plot(NewLabels * 1.2, '.')
     plt.plot(TotalLabels, '.')
     plt.show()
 

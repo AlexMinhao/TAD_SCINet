@@ -465,13 +465,13 @@ if __name__ == "__main__":
     torch.backends.cudnn.enabled = True
     # 'machine-1-1'
     args.dataset = 'gesture'  # chfdb_chf13_45590
-    subdataset = 'None'
+    subdataset = '1'
 
     args.save_path = 'Gesture_Results'
     args.variate_index = 2
     args.slide_win = 128
     args.slide_stride = 2
-    args.hidden_size = 8
+    args.hidden_size = 16
     # args.batch = 32
     args.pred_len = 32
     args.seq_mask_range_low = 4
