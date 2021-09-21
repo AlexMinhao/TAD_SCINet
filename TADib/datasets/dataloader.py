@@ -14,16 +14,13 @@ data_path_dict = {
     "SMD": "./data/SMD",
     "SMAP": "./datasets/anomaly/SMAP-MSL/processed_SMAP",
     "MSL": "./data/MSL",
-    "WADI": "./data/WADI",
-    "SWAT_OLD": "./data/SWAT/processed",
-    "SWAT": "./data/SWAT/processed",
-    "WADI_SPLIT": "./datasets/anomaly/WADI_SPLIT/processed",
-    "SWAT_SPLIT": "./datasets/anomaly/SWAT_SPLIT/processed",
+    "SWAT": "./data/SWAT",
     "gesture":"./data/gesture/labeled",
     "power_demand":"./data/power_demand/labeled",
     "nyc_taxi":"./data/nyc_taxi/labeled",
     "kdd99":"./data/kdd99",
     "ecg":"./data/ecg",
+    "credit":"./data/credit",
 }
 
 
@@ -37,10 +34,10 @@ def get_data_dim(dataset):
     elif "WADI" in dataset:
         return 93
     elif "SWAT" in dataset:
-        return 40
+        return 36
     elif "gesture" in dataset:
         return 2
-    elif "power" in dataset:
+    elif "power_demand" in dataset:
         return 1
     elif "nyc_taxi" in dataset:
         return 3
@@ -48,6 +45,8 @@ def get_data_dim(dataset):
         return 40
     elif "ecg" in dataset:
         return 2
+    elif "credit" in dataset:
+        return 28
     else:
         raise ValueError("unknown dataset " + str(dataset))
 
@@ -101,12 +100,99 @@ def load_dataset(dataset, subdataset, use_dim="all", root_dir="../", nrows=None)
 
         return data_dict
 
-    elif dataset == 'SWAT_OLD'or dataset =='SMD':
-        prefix = subdataset
-        downsample = False
-        if dataset == 'SWAT_OLD':
-            downsample = True
-            prefix ='swat'
+    elif dataset == 'cover' or dataset =='pima' or dataset =='smtp' :
+
+        train_start = 0
+        test_start = 0
+        train_end = None
+        test_end = None
+        print('load data of:', dataset)
+        print("train: ", train_start, train_end)  # train:  0 None
+        print("test: ", test_start, test_end)  # test:  0 None
+
+        f = os.path.join('./data/', dataset+'.csv')
+        data = np.loadtxt(f, dtype= np.float, delimiter=',')  # (28479, 38)
+        length = data.shape[0]
+        train_end = int(0.5*length)
+        train_data = data[train_start:train_end, 0:-1]
+        test_data = data[train_end::, 0:-1]
+        test_data_label = data[train_end::, -1]
+
+        if dataset =='smtp' or dataset == 'cover':
+            length = train_data.shape[0]
+            index = np.arange(0, length, 10)
+            train_data = train_data[index]
+
+            length = test_data.shape[0]
+            index = np.arange(0, length, 10)
+            test_data = test_data[index]
+
+            test_data_label = test_data_label[index]
+
+        data_max = np.max(train_data, axis=0)
+        data_min = np.min(train_data, axis=0)
+        # train_normalize_statistic = {"max": data_max.tolist(), "min": data_min.tolist()}
+
+        scale = data_max - data_min + 1e-5
+        train_data_scale = (train_data - data_min) / scale
+
+        test_data_scale = (test_data - data_min) / scale
+        data_dict = defaultdict(dict)
+        data_dict["train"] = train_data_scale
+        data_dict["test"] = test_data_scale
+        data_dict["test_labels"] = test_data_label
+
+
+        return data_dict
+
+    elif dataset == 'credit':
+
+        train_start = 0
+        test_start = 0
+        train_end = None
+        test_end = None
+        print('load data of:', dataset)
+        print("train: ", train_start, train_end)  # train:  0 None
+        print("test: ", test_start, test_end)  # test:  0 None
+
+        f = os.path.join('./data/', dataset, 'Credit.csv')
+        data = np.loadtxt(f, dtype= np.float, delimiter=',')  # (28479, 38)
+        length = data.shape[0]
+        train_end = int(0.5*length)
+        train_data = data[train_start:train_end, 0:3]
+        test_data = data[train_end::, 0:3]
+        test_data_label = data[train_end::, 29]
+
+        # length = train_data.shape[0]
+        # index = np.arange(0, length, 10)
+        # train_data = train_data[index]
+        #
+        # length = test_data.shape[0]
+        # index = np.arange(0, length, 10)
+        # test_data = test_data[index]
+        #
+        # test_data_label = test_data_label[index]
+
+        data_max = np.max(train_data, axis=0)
+        data_min = np.min(train_data, axis=0)
+        # train_normalize_statistic = {"max": data_max.tolist(), "min": data_min.tolist()}
+
+        scale = data_max - data_min + 1e-5
+        train_data_scale = (train_data - data_min) / scale
+
+        test_data_scale = (test_data - data_min) / scale
+        data_dict = defaultdict(dict)
+        data_dict["train"] = train_data_scale
+        data_dict["test"] = test_data_scale
+        data_dict["test_labels"] = test_data_label
+        data_dict["dim"] = x_dim
+
+        return data_dict
+
+
+    elif dataset == 'SWAT' or dataset =='SMD':
+
+        prefix ='swat'
         train_files = glob(os.path.join(path, prefix + "_train.pkl"))
         test_files = glob(os.path.join(path, prefix + "_test.pkl"))
         label_files = glob(os.path.join(path, prefix + "_test_label.pkl"))
@@ -121,21 +207,11 @@ def load_dataset(dataset, subdataset, use_dim="all", root_dir="../", nrows=None)
             f = open(f_name, "rb")
             train_data = pickle.load(f).reshape((-1, x_dim))
             f.close()
-            if downsample:
-                length = train_data.shape[0]
-                index = np.arange(0,length,10)
-                train_data = train_data[index]
-            if do_preprocess:
-                train_data = preprocess(train_data)
-            if use_dim != "all":
-                train_data = train_data[:, use_dim].reshape(-1, 1)
             if len(train_data) > 0:
                 train_data_list.append(train_data)
         data_dict["train"] = np.concatenate(train_data_list, axis=0)[:nrows]
         dtrain = np.concatenate(train_data_list, axis=0)[:nrows]
-        # np.savetxt(
-        #     f'./data/SWAT/swat_train_process.csv',
-        #     dtrain, delimiter=",")
+
 
 
         test_data_list = []
@@ -144,15 +220,6 @@ def load_dataset(dataset, subdataset, use_dim="all", root_dir="../", nrows=None)
             f = open(f_name, "rb")
             test_data = pickle.load(f).reshape((-1, x_dim))
             f.close()
-            if downsample:
-                length = test_data.shape[0]
-                index = np.arange(0,length,10)
-                test_data = test_data[index]
-            if do_preprocess:
-
-                test_data = preprocess(test_data)
-            if use_dim != "all":
-                test_data = test_data[:, use_dim].reshape(-1, 1)
             if len(test_data) > 0:
                 test_data_list.append(test_data)
         data_dict["test"] = np.concatenate(test_data_list, axis=0)[:nrows]
@@ -163,31 +230,17 @@ def load_dataset(dataset, subdataset, use_dim="all", root_dir="../", nrows=None)
             f = open(f_name, "rb")
             label_data = pickle.load(f)
             f.close()
-            if downsample:
-                length = label_data.shape[0]
-                index = np.arange(0, length, 10)
-                label_data = label_data[index]
             if len(label_data) > 0:
-                # label_data[0:1000] = 0
-                # label_data[44000:-1] = 0
                 label_data_list.append(label_data)
         data_dict["test_labels"] = np.concatenate(label_data_list, axis=0)[:nrows]
-        do_preprocess = True
-
 
         for k, v in data_dict.items():
             if k == "dim":
                 continue
             print("Shape of {} is {}.".format(k, v.shape))
         return data_dict
-    elif dataset == 'SWAT' or dataset == 'WADI':
-        if dataset == 'SWAT':
-            data_dict = load_swat_data(path)
-            return data_dict
 
-        else:
-            train_df, val_df, test_df = load_wadi_data(path)
-            return train_df
+
 
 
     elif dataset == 'ecg' or dataset == 'gesture' or dataset == 'nyc_taxi' or dataset == 'power_demand':
@@ -279,6 +332,9 @@ def load_dataset(dataset, subdataset, use_dim="all", root_dir="../", nrows=None)
         data_dict["test"] = test
         return data_dict
 
+    else:
+        print('No datasets')
+
     # if subdataset:
     #     prefix = subdataset
     #     train_files = glob(os.path.join(path, prefix + "_train.pkl"))
@@ -364,161 +420,7 @@ def reconstruct(seqData,mean,std):
     return seqData*std+mean
 
 
-def load_wadi_data(path):
-    train = path+'/WADI_train.zip'
-    z_tr = zipfile.ZipFile(train, "r")
-    f_tr = z_tr.open(z_tr.namelist()[0])
-    train_df = pd.read_csv(f_tr)
-    f_tr.close()
-    z_tr.close()
 
-    test = path + '/WADI_test.zip'
-    z_tr = zipfile.ZipFile(test, "r")
-    f_tr = z_tr.open(z_tr.namelist()[0])
-    test_df = pd.read_csv(f_tr)
-    f_tr.close()
-    z_tr.close()
-
-    train_df = train_df.fillna(method='ffill')
-    test_df.loc[test_df['label'] >= 1, 'label'] = 1
-    test_df = test_df.fillna(method='ffill')
-
-    sensors = ['1_AIT_001_PV', '1_AIT_002_PV', '1_AIT_003_PV', '1_AIT_004_PV',
-               '1_AIT_005_PV', '1_FIT_001_PV', '1_LT_001_PV', '2_DPIT_001_PV',
-               '2_FIC_101_CO', '2_FIC_101_PV', '2_FIC_101_SP', '2_FIC_201_CO',
-               '2_FIC_201_PV', '2_FIC_201_SP', '2_FIC_301_CO', '2_FIC_301_PV',
-               '2_FIC_301_SP', '2_FIC_401_CO', '2_FIC_401_PV', '2_FIC_401_SP',
-               '2_FIC_501_CO', '2_FIC_501_PV', '2_FIC_501_SP', '2_FIC_601_CO',
-               '2_FIC_601_PV', '2_FIC_601_SP', '2_FIT_001_PV', '2_FIT_002_PV',
-               '2_FIT_003_PV', '2_FQ_101_PV', '2_FQ_201_PV', '2_FQ_301_PV', '2_FQ_401_PV',
-               '2_FQ_501_PV', '2_FQ_601_PV', '2_LT_001_PV', '2_LT_002_PV', '2_MCV_101_CO',
-               '2_MCV_201_CO', '2_MCV_301_CO', '2_MCV_401_CO', '2_MCV_501_CO', '2_MCV_601_CO',
-               '2_P_003_SPEED', '2_P_004_SPEED', '2_PIC_003_CO', '2_PIC_003_PV', '2_PIT_001_PV',
-               '2_PIT_002_PV', '2_PIT_003_PV', '2A_AIT_001_PV', '2A_AIT_002_PV', '2A_AIT_003_PV',
-               '2A_AIT_004_PV', '2B_AIT_001_PV', '2B_AIT_002_PV', '2B_AIT_003_PV', '2B_AIT_004_PV',
-               '3_AIT_001_PV', '3_AIT_002_PV', '3_AIT_003_PV', '3_AIT_004_PV', '3_AIT_005_PV',
-               '3_FIT_001_PV', '3_LT_001_PV', 'LEAK_DIFF_PRESSURE', 'TOTAL_CONS_REQUIRED_FLOW']
-
-    actuators = ['1_MV_001_STATUS', '1_MV_004_STATUS', '1_P_001_STATUS', '1_P_003_STATUS',
-                 '1_P_005_STATUS', '2_LS_101_AH', '2_LS_101_AL', '2_LS_201_AH', '2_LS_201_AL',
-                 '2_LS_301_AH', '2_LS_301_AL', '2_LS_401_AH', '2_LS_401_AL', '2_LS_501_AH',
-                 '2_LS_501_AL', '2_LS_601_AH', '2_LS_601_AL', '2_MV_003_STATUS', '2_MV_006_STATUS',
-                 '2_MV_101_STATUS', '2_MV_201_STATUS', '2_MV_301_STATUS', '2_MV_401_STATUS',
-                 '2_MV_501_STATUS', '2_MV_601_STATUS', '2_P_003_STATUS']
-
-    # signals = []
-    # for name in sensors:
-    #     signals.append(ContinousSignal(name, SignalSource.sensor, isInput=True, isOutput=True,
-    #                                    min_value=train_df[name].min(), max_value=train_df[name].max(),
-    #                                    mean_value=train_df[name].mean(), std_value=train_df[name].std()))
-    # for name in actuators:
-    #     signals.append(DiscreteSignal(name, SignalSource.controller, isInput=True, isOutput=False,
-    #                                   values=train_df[name].unique()))
-
-    pos = len(train_df) * 3 // 4
-    val_df = train_df.loc[pos:, :]
-    val_df = val_df.reset_index(drop=True)
-
-    train_df = train_df.loc[:pos, :]
-    train_df = train_df.reset_index(drop=True)
-    return train_df, val_df, test_df#, signals
-
-
-def load_swat_data(path):
-    train = path + '/SWat_train.zip'
-    z_tr = zipfile.ZipFile(train, "r")
-    f_tr = z_tr.open(z_tr.namelist()[0])
-    train_df = pd.read_csv(f_tr)
-    f_tr.close()
-    z_tr.close()
-
-    test = path + '/SWat_test.zip'
-    z_tr = zipfile.ZipFile(test, "r")
-    f_tr = z_tr.open(z_tr.namelist()[0])
-    test_df = pd.read_csv(f_tr)
-    f_tr.close()
-    z_tr.close()
-
-    test_df['label'] = 0
-    test_df.loc[test_df['Normal/Attack'] != 'Normal', 'label'] = 1
-
-
-
-    sensors = ['FIT101', 'LIT101', 'AIT201', 'AIT202', 'AIT203', 'FIT201',
-               'DPIT301', 'FIT301', 'LIT301', 'AIT401', 'AIT402', 'FIT401',
-               'LIT401', 'AIT501', 'AIT502', 'AIT503', 'AIT504', 'FIT501',
-               'FIT502', 'FIT503', 'FIT504', 'PIT501', 'PIT502', 'PIT503', 'FIT601', ]
-
-    actuators = ['MV101', 'P101', 'P102', 'MV201', 'P201', 'P202',
-                 'P203', 'P204', 'P205', 'P206', 'MV301', 'MV302',
-                 'MV303', 'MV304', 'P301', 'P302', 'P401', 'P402',
-                 'P403', 'P404', 'UV401', 'P501', 'P502', 'P601',
-                 'P602', 'P603']
-    # signals = []
-    # for name in sensors:
-    #     signals.append(ContinousSignal(name, SignalSource.sensor, isInput=True, isOutput=True,
-    #                                    min_value=train_df[name].min(), max_value=train_df[name].max(),
-    #                                    mean_value=train_df[name].mean(), std_value=train_df[name].std()))
-    # for name in actuators:
-    #     signals.append(DiscreteSignal(name, SignalSource.controller, isInput=True, isOutput=False,
-    #                                   values=train_df[name].unique()))
-    length = train_df.shape[0]
-    index = np.arange(0, length, 2)
-    train_data = train_df.values[:,1:52]
-    train_df_sampled =train_data[index][16530:,:]
-    # pos = len(train_df) * 3 // 4
-    # val_df = train_data[pos:, :]
-    # val_df = val_df.reset_index(drop=True)
-
-    # train_df = train_df.loc[:pos, :]
-    # train_df = train_df.reset_index(drop=True)
-    length = test_df.shape[0]
-    index = np.arange(0, length, 2)
-    test_data = test_df.values[:,1:52]
-    test_label = test_df.values[:,-1]
-    test_df_sampled = test_data[index]
-    test_df_sampled_label = test_label[index]
-
-    data_dict = defaultdict(dict)
-
-    data_max = np.max(train_df_sampled, axis=0)
-    data_min = np.min(train_df_sampled, axis=0)
-    # train_normalize_statistic = {"max": data_max.tolist(), "min": data_min.tolist()}
-
-    scale = data_max - data_min + 1e-5
-    train_df_sampled = (train_df_sampled - data_min) / scale
-    index = np.where(scale != 1e-5)
-    index_not = [4, 10, 11, 13, 15, 23, 29, 30, 31, 32, 33 ,42, 43, 48 ,50]
-    index = [ 0,  1,  2,  3,  5,  6 , 7 , 8 , 9 ,12 ,14 ,16, 17 ,18 ,19, 20 ,21 ,22, 24, 25, 26, 27, 28, 34,
- 35, 36 ,37 ,38, 39, 40 ,41 ,44, 45 ,46, 47, 49]
-
-    # data = np.clip(data, 0.0, 1.0)
-
-    train_df_sampled = np.array(train_df_sampled[:,index],dtype=float)
-    test_df_sampled = np.array(test_df_sampled[:,index],dtype=float)
-    test_df_sampled_label = np.array(test_df_sampled_label,dtype=float)
-    data_min = data_min[index]
-    scale = scale[index]
-
-    test_df_sampled = (test_df_sampled - data_min) / scale
-    test_df_sampled = np.array(test_df_sampled, dtype=float)
-
-    np.savetxt(
-        f'./data/SWAT/swat_train_process.csv',
-        train_df_sampled, delimiter=",")
-    np.savetxt(
-        f'./data/SWAT/swat_test_process.csv',
-        test_df_sampled, delimiter=",")
-    np.savetxt(
-        f'./data/SWAT/swat_test_process_label.csv',
-        test_df_sampled_label, delimiter=",")
-
-    data_dict["train"] = train_df_sampled
-    data_dict["test"] = test_df_sampled
-    data_dict["test_labels"] = test_df_sampled_label
-    data_dict["dim"] = 51
-
-    return data_dict #, signals
 
 
 
@@ -526,4 +428,4 @@ def load_swat_data(path):
 
 if __name__ == "__main__":
 
-    load_dataset('WADI', subdataset = 'swat', use_dim="all", root_dir="/", nrows=None)
+    load_dataset('power_demand', subdataset = '0', use_dim="all", root_dir="/", nrows=None)

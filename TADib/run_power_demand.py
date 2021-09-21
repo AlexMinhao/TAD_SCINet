@@ -51,7 +51,7 @@ parser.add_argument('--groups', type=int, default=1)
 parser.add_argument('--save_path', type=str, default='ECG_Results')
 
 parser.add_argument('--pred_len', type=int, default=128)
-parser.add_argument('--seq_mask_range_low', type=int, default=8)
+parser.add_argument('--seq_mask_range_low', type=int, default=4)
 parser.add_argument('--seq_mask_range_high', type=int, default=4)
 
 parser.add_argument('--ensemble', type=int, default=0)
@@ -446,7 +446,7 @@ def get_save_path(feature_name=''):
     datestr = now.strftime('%m_%d_%H%M%S')
 
     paths = [  # args.model_type
-        f'{dir_path}/{subdataset}/{args.variate_index}dim/{args.dataset}_{args.model_type}_Pretrain2Stack_{args.variate_index}dimNew_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_{datestr}.pt',
+        f'{dir_path}/{subdataset}/{args.variate_index}dim/{args.dataset}_{args.model_type}_Pretrain_{args.variate_index}dimNew_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_{datestr}.pt',
         f'results/{dir_path}/{args.dataset}_{datestr}.csv',
     ]
 
@@ -464,49 +464,21 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = True  # Can change it to False --> default: False
     torch.backends.cudnn.enabled = True
     # 'machine-1-1'
-    args.dataset = 'gesture'  # chfdb_chf13_45590
-    subdataset = 'New'
+    args.dataset = 'power_demand'
+    subdataset = '0'
 
-    args.save_path = 'Gesture_Results'
-    args.variate_index = 2
+    args.save_path = 'Power_Results'
+    args.variate_index = 1
     args.slide_win = 128
     args.slide_stride = 2
     args.hidden_size = 16
     # args.batch = 32
-    args.pred_len = 32
-    args.seq_mask_range_low = 4
-    args.seq_mask_range_high = 4
+    args.pred_len = int(args.slide_win/4)
 
     args.model_type = 'BiSeqMask'
 
     data_dict = load_dataset(args.dataset, subdataset=subdataset, use_dim="all", root_dir="/", nrows=None)
 
-    cfg = {
-        'slide_win': args.slide_win,
-        'slide_stride': args.slide_stride,
-        'test_slide_win': args.slide_win,
-        'test_slide_stride': args.slide_win,
-    }
-
-    train_config = {
-        'batch': args.batch,
-        'epoch': args.epoch,
-        'seed': args.random_seed,
-        'val_ratio': args.val_ratio,  # 0.1
-        'decay': args.decay,
-        'topk': args.topk,
-        'lr': args.learning_rate
-    }
-
-    train_dataset = SNetDataset(data_dict['train'], mode='train', add_anomaly=False,
-                                test_label=data_dict['test_labels'], config=cfg)
-    train_dataloader, val_dataloader = get_loaders(train_dataset=train_dataset, seed=train_config['seed'],
-                                                   batch=train_config['batch'],
-                                                   val_ratio=train_config['val_ratio'])
-
-    test_dataset = SNetDataset(data_dict['test'], mode='test', test_label=data_dict['test_labels'], config=cfg)
-
-    test_dataloader = DataLoader(test_dataset, batch_size=args.batch, shuffle=False)
 
     part = [[1, 1], [1, 1], [1, 1], [0, 0], [0, 0], [0, 0], [0, 0]]
 
@@ -529,8 +501,33 @@ if __name__ == "__main__":
     model.to(args.device)
     model_save_path = get_save_path()[0]
     args.train = 1
-    args.ensemble = 0
     if args.train:
+        cfg = {
+            'slide_win': args.slide_win,
+            'slide_stride': args.slide_stride,
+            'test_slide_win': args.slide_win,
+            'test_slide_stride': args.slide_win,
+        }
+
+        train_config = {
+            'batch': args.batch,
+            'epoch': args.epoch,
+            'seed': args.random_seed,
+            'val_ratio': args.val_ratio,  # 0.1
+            'decay': args.decay,
+            'topk': args.topk,
+            'lr': args.learning_rate
+        }
+
+        train_dataset = SNetDataset(data_dict['train'], mode='train', add_anomaly=False,
+                                    test_label=data_dict['test_labels'], config=cfg)
+        train_dataloader, val_dataloader = get_loaders(train_dataset=train_dataset, seed=train_config['seed'],
+                                                       batch=train_config['batch'],
+                                                       val_ratio=train_config['val_ratio'])
+        test_dataset = SNetDataset(data_dict['test'], mode='test', test_label=data_dict['test_labels'], config=cfg)
+        test_dataloader = DataLoader(test_dataset, batch_size=args.batch, shuffle=False)
+
+
         train(model,
               save_path=model_save_path,
               config=train_config,
@@ -549,22 +546,238 @@ if __name__ == "__main__":
 
 
     else:
-        dir_path = args.save_path
 
-        # model_load_path = f'{dir_path}/{args.dataset}_best_' + \
-        #                   f'SCINetBiSeqRollingScan_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_mrl{args.seq_mask_range_high}' \
-        #                   f'_07_18_215607.pt'
+        args.slide_win = 128
+        args.slide_stride = 2
+        args.hidden_size = 16
+        args.batch = 32
+        args.pred_len = 32
+        args.model_type = 'BiSeqMask'
+
+        cfg = {
+            'slide_win': args.slide_win,
+            'slide_stride': args.slide_stride,
+            'test_slide_win': int(args.slide_win + args.slide_win / 4),
+            'test_slide_stride': int(args.slide_win / 4),
+        }
+
+        train_config = {
+            'batch': args.batch,
+            'epoch': args.epoch,
+            'seed': args.random_seed,
+            'val_ratio': args.val_ratio,  # 0.1
+            'decay': args.decay,
+            'topk': args.topk,
+            'lr': args.learning_rate
+        }
+
+
+        test_dataset = SNetDataset(data_dict['test'], mode='test', test_slide=int(args.slide_win / 4),
+                                   test_label=data_dict['test_labels'], config=cfg)
+
+        test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+
+
+        dir_path = args.save_path
 
         model_load_path = f'{dir_path}/{subdataset}/{args.dataset}_{args.model_type}_Pretrain2Stack_lradj{args.lradj}_' \
                           f'{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_07_30_153926.pt',
 
+        dir_path = args.save_path
+
+        model_load_path = f'{dir_path}/{subdataset}/{args.variate_index}dim/' \
+                          f'gesture_BiSeqMask_Pretrain2Stack_2dimNew_group1_lradj3_128_h16_bt16_p32_08_18_212624.pt'  # F1 score: 0.6056701030927836
+
+
+        print(model_load_path)
         model.load_state_dict(torch.load(model_load_path))
         best_model = model.to(args.device)
 
-        _, val_result = test(model, val_dataloader, type=0)
-        _, test_result = test(model, test_dataloader,
-                              type=0)  # avg_loss, [test_predicted_list, test_ground_list, test_labels_list] 2034*27
-        get_score(test_result, val_result)
+        loss_func = nn.L1Loss()
+        device = args.device
+
+        test_loss_list = []
+        now = time.time()
+
+        t_test_predicted_list = []
+        t_test_ground_list = []
+        t_test_labels_list = []
+
+        test_len = len(test_dataloader)
+
+        model.eval()
+
+        #################################################################################################
+        Stride = int(args.slide_win / 4)
+        ActiveWindow = args.slide_win  # F1 score: 0.6720502467474203
+        find_threshold = False  # Init F1 score: 0.6934174932371505,Threshods: 3.4998771603924057
+        variate_num = [0,
+                       1]  # finture Initial F1 score: 0.7658707581885638  precision: 0.961352641524112  recall: 0.6364605475857085
+        number = data_dict['test_labels'].shape[0]
+        count = -1
+        threshod = 3.4998  # 0.3 #7.3096 #
+        threshod_l1 = 0.1
+        NewLabels = np.zeros(number)
+        TotalLabels = data_dict['test_labels']
+        anomaly = np.where(TotalLabels == 1)[0]
+        enter = False
+        phi = 1
+        ERRORS = []
+        for x, y, labels in test_dataloader:
+            x, y, labels = [item.to(device).float() for item in [x, y, labels]]
+            count = count + 1
+
+            with torch.no_grad():
+                x_temp = x.detach().cpu().numpy()
+                x_value = x[:, -ActiveWindow:, :]
+                y_value = y[:, -ActiveWindow:, :]
+                labels_value = labels[:, -ActiveWindow:]
+                predicted = model(x_value)  # torch.Size([31, 27])
+
+                l1Error = loss_func(predicted, y_value).detach().cpu().numpy()
+
+                predicted = predicted[:, :, variate_num].squeeze().detach().cpu().numpy()
+                if len(variate_num) > 1:
+                    smoothed_pred = []
+                    for i in variate_num:
+                        smoothed_pred.append(smooth(predicted[:, i], window_len=5)[0:-4])
+                    smoothed_pred = np.array(smoothed_pred).transpose()
+                    gt_seq = y_value[:, :, variate_num].squeeze().detach().cpu().numpy()
+                    dist_ts = dtw(smoothed_pred[-3 * Stride:, :], gt_seq[-3 * Stride:, :])
+                else:
+                    smoothed_pred = smooth(predicted, window_len=5)[0:-4]
+                    gt_seq = y_value[:, :, variate_num].squeeze().detach().cpu().numpy()
+                    dist_ts = dtw(smoothed_pred[-3 * Stride:], gt_seq[-3 * Stride:])
+
+                error_type = dist_ts
+                ERRORS.append(error_type)
+                # plt.plot(smoothed_pred, color='r')
+                # plt.plot(gt_seq, color='b')
+                # plt.title(f'SegDTWError:{dist_ts},L1Error: {l1Error}')
+                # plt.plot(labels_value.squeeze().detach().cpu().numpy(), '.')
+                # plt.show()
+                if not find_threshold:
+                    End = Stride + Stride * count + ActiveWindow
+                    if error_type > phi * threshod:
+                        print("Error occured")  # 32 +  0-127    32-159   64-191
+                        enter = True
+
+                        print('Start-->count{0}->{1}:{2}, error->{3}'.format(count, End - Stride, End, error_type))
+
+                        NewLabels[End - Stride:   End] = 1  # find the last 32 dot should be the anomaly condidate
+                        enumDtwError = []
+                        enumL1Error = []
+                        for k in range(Stride):
+                            x_i = x[:, (-ActiveWindow - k):(ActiveWindow + Stride - k), :]
+                            y_i = y[:, (-ActiveWindow - k):(ActiveWindow + Stride - k), :]
+                            labels_i = labels[:,
+                                       (-ActiveWindow - k):(ActiveWindow + Stride - k)].squeeze().detach().cpu().numpy()
+                            predicted_i = model(x_i)
+                            l1Error_i = loss_func(predicted_i, y_i).detach().cpu().numpy()
+
+                            predicted_i = predicted_i[:, :, variate_num].squeeze().detach().cpu().numpy()
+                            if len(variate_num) > 1:
+                                smoothed_pred_i = []
+                                for i in variate_num:
+                                    smoothed_pred_i.append(smooth(predicted[:, i], window_len=5)[0:-4])
+                                smoothed_pred_i = np.array(smoothed_pred_i).transpose()
+                            else:
+
+                                smoothed_pred_i = smooth(predicted_i, window_len=5)[0:-4]
+                            gt_seq_i = y_i[:, :, variate_num].squeeze().detach().cpu().numpy()
+                            dist_ts_i = dtw(smoothed_pred_i[-3 * Stride:], gt_seq_i[-3 * Stride:])  ####################
+                            enumDtwError.append(dist_ts_i)  #########################################  dtw
+                            enumL1Error.append(l1Error_i)  #########################################  L1
+
+                            # plt.plot(smoothed_pred_i, color='r')
+                            # plt.plot(gt_seq_i, color='b')
+                            # plt.title(f'SegDTWError:{dist_ts_i},L1Error: {l1Error_i}')
+                            # plt.plot(labels_i, '.')
+                            # plt.show()
+
+                        pos = []
+                        for j, error in enumerate(enumDtwError):
+                            if error < 0.4 * phi * threshod:
+                                pos.append(j)
+
+                        if len(pos) == 0:
+                            #     pos = np.where(enumDtwError == np.min(enumDtwError))
+                            # else:
+                            #     pos = pos[0]
+                            print("All Error occured")
+                        else:
+                            pos = pos[0]
+                            for p in range(Stride - pos):
+                                print(" Error -> number remove:", End - Stride + p)
+                                NewLabels[End - Stride:  End - Stride + p] = 0
+
+                    #
+                    elif error_type < 1.0 * threshod:
+                        if enter == True:  # outlier
+                            print(
+                                "Error Exit,{0}".format(error_type))  # [///////////[//]...][AAAAA][AAAAA][AAAAA][AAAAA]
+                            enumDtwExitError = []
+                            enumlL1ExitError = []
+                            for k in range(Stride):
+                                x_i = x[:, (-ActiveWindow - k):(ActiveWindow + Stride - k), :]
+                                y_i = y[:, (-ActiveWindow - k):(ActiveWindow + Stride - k), :]
+                                labels_i = labels[:,
+                                           (-ActiveWindow - k):(
+                                                       ActiveWindow + Stride - k)].squeeze().detach().cpu().numpy()
+                                predicted_i = model(x_i)
+                                l1Error_i = loss_func(predicted_i, y_i).detach().cpu().numpy()
+
+                                predicted_i = predicted_i[:, :, variate_num].squeeze().detach().cpu().numpy()
+                                if len(variate_num) > 1:
+                                    smoothed_pred_i = []
+                                    for i in variate_num:
+                                        smoothed_pred_i.append(smooth(predicted[:, i], window_len=5)[0:-4])
+                                    smoothed_pred_i = np.array(smoothed_pred_i).transpose()
+                                else:
+
+                                    smoothed_pred_i = smooth(predicted_i, window_len=5)[0:-4]
+
+                                gt_seq_i = y_i[:, :, variate_num].squeeze().detach().cpu().numpy()
+                                dist_ts_i = dtw(smoothed_pred_i[-3 * Stride:], gt_seq_i[-3 * Stride:])  ############
+                                enumDtwExitError.append(dist_ts_i)
+                                enumlL1ExitError.append(l1Error_i)
+
+                                # plt.plot(smoothed_pred_i, color='r')
+                                # plt.plot(gt_seq_i, color='b')
+                                # plt.title(f'SegDTWError:{dist_ts_i},L1Error: {l1Error_i}')
+                                # plt.plot(labels_i, '.')
+                                # plt.show()
+
+                            pos_exit = []
+                            for j, error in enumerate(enumDtwExitError):  # enumDtwError###################
+                                if error > 1.0 * phi * threshod:
+                                    pos_exit.append(j)
+
+                            if len(pos_exit) == 0:
+                                print("All Error Exit")
+                            else:
+                                pos = pos_exit[0]
+                                for p in range(pos):
+                                    NewLabels[End - ActiveWindow - p:End] = 0
+                                    print("Error Exit Position：{0}".format(End - ActiveWindow - p))
+
+                            enter = False
+                    else:
+                        print("Intermediate zone Error Exit,{0}".format(error_type))
+                    # threshod = dist_ts
+        if find_threshold:
+            get_dtw(ERRORS, data_dict['test_labels'], 44900, interval=32)
+        plt.plot(ERRORS, color='r')
+        plt.plot(NewLabels * 1.2, '.')
+        plt.plot(TotalLabels, '.')
+        plt.show()
+
+        f1, precision, recall, TP, TN, FP, FN = calc_point2point(NewLabels, TotalLabels)
+
+        print(f'Initial F1 score: {f1}')
+        print(f'Initial precision: {precision}')
+        print(f'Initial recall: {recall}\n')
+
 
 
 

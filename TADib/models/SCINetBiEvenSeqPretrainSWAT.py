@@ -6,10 +6,6 @@ import torch
 from torch.nn.utils import weight_norm
 import argparse
 import numpy as np
-from models.TCN import TCN
-from models.GRU import GRU
-
-
 import random
 random.seed(80) #80
 
@@ -405,8 +401,13 @@ class EncoderTree(nn.Module):
         det = []  # List of averaged pooled details
         input = [x, ]
         for l in self.level_layers:
-
+            # input_save = input[0].detach().cpu().numpy()
+            # np.save('F:\school\Papers\\timeseriesNew\TS-Net\log\\systic\\' + 'inputL1.npy', input_save)
             x_even_update, x_odd_update = l(input[0])
+            # even = x_even_update.detach().cpu().numpy()
+            # np.save('F:\school\Papers\\timeseriesNew\TS-Net\log\\systic\\' + 'evenL1.npy', even)
+            # odd = x_odd_update.permute(0,2,1).detach().cpu().numpy()
+            # np.save('F:\school\Papers\\timeseriesNew\TS-Net\log\\systic\\' + 'oddL1.npy', odd)
 
             if self.level_part[self.count_levels][0]:
                 input.append(x_even_update)
@@ -447,20 +448,6 @@ class EncoderTree(nn.Module):
 class SeqInterPrediction(nn.Module):
     def __init__(self, args, seq_mask_range, pred_len, in_planes, number_levels, number_level_part, num_layers=3):
         super(SeqInterPrediction, self).__init__()
-
-
-        # channel_sizes = [32] * num_layers
-        # self.Left_module = TCN(in_planes, output_len=32, num_channels=channel_sizes, kernel_size=args.kernel,
-        #             dropout=0.5)
-        #
-        # self.Right_module = TCN(in_planes, output_len=32, num_channels=channel_sizes, kernel_size=args.kernel,
-        #                        dropout=0.5)
-
-        # self.Left_module = GRU(hidC=in_planes, hidR=32)
-        #
-        # self.Right_module = GRU(hidC=in_planes, hidR=32)
-
-
         self.Left_module = EncoderTree(
             [
                 LevelIDCN(args=args, in_planes=in_planes,
@@ -592,19 +579,19 @@ class SCIMaskEvenPretrain(nn.Module):
         in_planes = input_dim
         out_planes = input_dim * (number_levels + 1)
 
-        # self.blocks = nn.ModuleList([EncoderTree(
-        #     [
-        #         LevelIDCN(args=args, in_planes=in_planes,
-        #                   lifting_size=[2, 1], kernel_size=4, no_bottleneck=True,
-        #                   share_weights=False, simple_lifting=False, regu_details=0.01, regu_approx=0.01)
-        #
-        #         for l in range(number_levels)
-        #     ],
-        #
-        #     level_parts=number_level_part,
-        #     num_layers=num_layers,
-        #     Encoder=True
-        # ) for i in range(6)])
+        self.blocks = nn.ModuleList([EncoderTree(
+            [
+                LevelIDCN(args=args, in_planes=in_planes,
+                          lifting_size=[2, 1], kernel_size=4, no_bottleneck=True,
+                          share_weights=False, simple_lifting=False, regu_details=0.01, regu_approx=0.01)
+
+                for l in range(number_levels)
+            ],
+
+            level_parts=number_level_part,
+            num_layers=num_layers,
+            Encoder=True
+        ) for i in range(6)])
 
 
 

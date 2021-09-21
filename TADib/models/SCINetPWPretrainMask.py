@@ -7,6 +7,8 @@ from torch.nn.utils import weight_norm
 import argparse
 import numpy as np
 import random
+
+import copy
 random.seed(80) #80
 
 class Splitting(nn.Module):
@@ -454,13 +456,14 @@ class Chomp1d(nn.Module):
 
 class SCI_Point_Mask(nn.Module):
     def __init__(self, args, num_classes, input_len, input_dim=9,
-                 number_levels=4, number_level_part=[[1, 0], [1, 0], [1, 0]], num_layers=3,
+                 number_levels=4, number_level_part=[[1, 0], [1, 0], [1, 0]], num_layers=3, point_part = 6,
                  concat_len=None, no_bootleneck=True):
         super(SCI_Point_Mask, self).__init__()
 
-        self.point_part = args.point_part
+        self.point_part = point_part
         in_planes = input_dim
         out_planes = input_dim * (number_levels + 1)
+
 
         self.blocks = nn.ModuleList([EncoderTree(
             [
@@ -577,6 +580,47 @@ class SCI_Point_Mask(nn.Module):
 
         return MaskX, PartMask
 
+    def creatMaskEvenSplit1(self, x, part=6):
+        b, l, c = x.shape
+        blist = list(range(0, b))
+        llist = list(range(0, l))
+        clist = list(range(0, c))
+        index = []
+
+        b_index =[]
+        for l_ind in llist:
+            for c_ind in clist:
+                b_index.append([l_ind, c_ind])
+
+        slice_num = int(l * c / part)
+        PartMasktotal = []
+        MaskXtotal = []
+        for b_ind in blist:
+            PartMask = []
+            MaskX = []
+            b_batch_index =copy.copy(b_index)
+            for i in range(part):
+                slice = random.sample(b_batch_index, slice_num)
+                Mask = torch.ones(l, c, device=x.device)
+                for s in slice:
+                    Mask[s[0], s[1]] = 0
+                    b_batch_index.remove(s)
+                Mask = (Mask == 0)
+                Mask_temp = Mask.detach().cpu().numpy()
+
+                PartMask.append(Mask)
+                mask_x_temp = x[b_ind].masked_fill(Mask, 0)
+                mask_x_temp = mask_x_temp.detach().cpu().numpy()
+                MaskX.append(x[b_ind].masked_fill(Mask, 0))
+            MaskX = torch.stack(MaskX,dim = 0)
+            PartMask = torch.stack(PartMask, dim = 0)
+            MaskXtotal.append(MaskX)
+            PartMasktotal.append(PartMask)
+
+        MaskXtotal = torch.stack(MaskXtotal, dim=0)
+        PartMasktotal = torch.stack(PartMasktotal, dim=0)
+        return MaskXtotal.permute(1,0,2,3), PartMasktotal.permute(1,0,2,3)
+
 
 
 
@@ -593,11 +637,16 @@ class SCI_Point_Mask(nn.Module):
 
 
         for i in range(self.point_part):
+            temp = point_mask_x[i].detach().cpu().numpy()
+            temp2 = point_mask[i].detach().cpu().numpy()
             mask_x_process = self.blocks[0](point_mask_x[i])
             unmask = (point_mask[i] == False)
+            temp3 = unmask.detach().cpu().numpy()
             mask_x_process = mask_x_process.masked_fill(unmask, 0)
+            temp = mask_x_process.detach().cpu().numpy()
             point_processed_x = point_processed_x + mask_x_process
         #
+        temp4 = point_processed_x.detach().cpu().numpy()
         point_processed_x = self.projection(point_processed_x)
         #
 
@@ -631,13 +680,13 @@ if __name__ == '__main__':
     parser.add_argument('--point_part', type=int, default=12)
     args = parser.parse_args()
     part = [[1, 1], [1, 1], [1, 1], [0, 0], [0, 0], [0, 0], [0, 0]]  # Best model
-    # part = [[1, 1], [0, 0], [0, 0]]
+    part = [[1, 1], [0, 0], [0, 0]]
     # part = [ [0, 0]]
 
     print('level number {}, level details: {}'.format(len(part), part))
-    model = SCI_Point_Mask(args, num_classes=168, input_len=168, input_dim=2,
+    model = SCI_Point_Mask(args, num_classes=12, input_len=12, input_dim=2,
                    number_levels=len(part),
-                   number_level_part=part, num_layers=3, concat_len=None).cuda()
-    x = torch.randn(16, 168, 2).cuda()
+                   number_level_part=part, num_layers=2, concat_len=None).cuda()
+    x = torch.randn(16, 12, 2).cuda()
     y = model(x)
     print(y.shape)

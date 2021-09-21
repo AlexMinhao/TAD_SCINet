@@ -9,6 +9,8 @@ from datasets.SNetDataset import SNetDataset
 
 import time
 import torch.nn.functional as F
+from sklearn import metrics
+from sklearn.metrics import auc
 
 from models.SCINetPWPretrainMask import SCI_Point_Mask
 from models.SCINetBiEvenSeqPretrain import SCIMaskEvenPretrain
@@ -342,13 +344,13 @@ def test(model, dataloader, type=0):
             os.makedirs(folder_path)
         print(folder_path)
         np.savetxt(  # args.model_type
-            f'{folder_path}/{subdataset}/{args.variate_index}dim/val_{args.dataset}_{args.model_type}2Stack_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_ground_list.csv',
+            f'{folder_path}/{subdataset}/{args.variate_index}dim/val_{args.dataset}_{args.model_type}_{args.point_part}_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_ground_list.csv',
             t_test_ground_list.detach().cpu().numpy(), delimiter=",")
         np.savetxt(
-            f'{folder_path}/{subdataset}/{args.variate_index}dim/val_{args.dataset}_{args.model_type}2Stack_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_predicted_list.csv',
+            f'{folder_path}/{subdataset}/{args.variate_index}dim/val_{args.dataset}_{args.model_type}_{args.point_part}_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_predicted_list.csv',
             t_test_predicted_list.detach().cpu().numpy(), delimiter=",")
         np.savetxt(
-            f'{folder_path}/{subdataset}/{args.variate_index}dim/val_{args.dataset}_{args.model_type}2Stack_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_labels_list.csv',
+            f'{folder_path}/{subdataset}/{args.variate_index}dim/val_{args.dataset}_{args.model_type}_{args.point_part}_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_labels_list.csv',
             t_test_labels_list.detach().cpu().numpy(), delimiter=",")
 
 
@@ -358,13 +360,13 @@ def test(model, dataloader, type=0):
             os.makedirs(folder_path)
         print(folder_path)
         np.savetxt(
-            f'{folder_path}/{subdataset}/{args.variate_index}dim/test_{args.dataset}_{args.model_type}2Stack_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_ground_list.csv',
+            f'{folder_path}/{subdataset}/{args.variate_index}dim/test_{args.dataset}_{args.model_type}_{args.point_part}_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_ground_list.csv',
             t_test_ground_list.detach().cpu().numpy(), delimiter=",")
         np.savetxt(
-            f'{folder_path}/{subdataset}/{args.variate_index}dim/test_{args.dataset}_{args.model_type}2Stack_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_predicted_list.csv',
+            f'{folder_path}/{subdataset}/{args.variate_index}dim/test_{args.dataset}_{args.model_type}_{args.point_part}_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_predicted_list.csv',
             t_test_predicted_list.detach().cpu().numpy(), delimiter=",")
         np.savetxt(
-            f'{folder_path}/{subdataset}/{args.variate_index}dim/test_{args.dataset}_{args.model_type}2Stack_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_labels_list.csv',
+            f'{folder_path}/{subdataset}/{args.variate_index}dim/test_{args.dataset}_{args.model_type}_{args.point_part}_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_labels_list.csv',
             t_test_labels_list.detach().cpu().numpy(), delimiter=",")
 
     test_predicted_list = t_test_predicted_list.tolist()
@@ -408,7 +410,7 @@ def get_score(test_result, val_result):
         os.makedirs(folder_path)
     print(folder_path)
     np.savetxt(
-        f'{folder_path}/{subdataset}/{args.variate_index}dim/bestF1_{args.dataset}_{args.model_type}2Stack_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_pred_label.csv',
+        f'{folder_path}/{subdataset}/{args.variate_index}dim/bestF1_{args.dataset}_{args.model_type}_{args.point_part}_{args.variate_index}dimNum{args.variate_index}_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_pred_label.csv',
         top1_best_info[-1], delimiter=",")
 
     print(f'F1 score: {info[0]}')
@@ -446,7 +448,7 @@ def get_save_path(feature_name=''):
     datestr = now.strftime('%m_%d_%H%M%S')
 
     paths = [  # args.model_type
-        f'{dir_path}/{subdataset}/{args.variate_index}dim/{args.dataset}_{args.model_type}_Pretrain2Stack_{args.variate_index}dimNew_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_{datestr}.pt',
+        f'{dir_path}/{subdataset}/{args.variate_index}dim/{args.dataset}_{args.model_type}_{args.point_part}_Pretrain_{args.variate_index}dimNew_group{args.groups}_lradj{args.lradj}_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_{datestr}.pt',
         f'results/{dir_path}/{args.dataset}_{datestr}.csv',
     ]
 
@@ -464,22 +466,25 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = True  # Can change it to False --> default: False
     torch.backends.cudnn.enabled = True
     # 'machine-1-1'
-    args.dataset = 'gesture'  # chfdb_chf13_45590
-    subdataset = 'New'
+    args.dataset = 'cover'  # smtp 3  pima 8  cover 10
+    subdataset = 'None'
+    if args.dataset == 'cover':
+        args.save_path = 'cover_Results'
+        args.variate_index = 10
+        args.slide_win = 256  # 256
+        args.slide_stride = 64
+        args.hidden_size = 2
+        args.batch = 16
+        args.pred_len = 64  # 64
+        args.seq_mask_range_low = 4
+        args.seq_mask_range_high = 4
+        args.point_part = 4
+        args.model_type = 'BiPointMask'  # BiPointMask'#'BiSeqMask'
 
-    args.save_path = 'Gesture_Results'
-    args.variate_index = 2
-    args.slide_win = 128
-    args.slide_stride = 2
-    args.hidden_size = 16
-    # args.batch = 32
-    args.pred_len = 32
-    args.seq_mask_range_low = 4
-    args.seq_mask_range_high = 4
-
-    args.model_type = 'BiSeqMask'
+        args.epoch = 50
 
     data_dict = load_dataset(args.dataset, subdataset=subdataset, use_dim="all", root_dir="/", nrows=None)
+
 
     cfg = {
         'slide_win': args.slide_win,
@@ -522,9 +527,9 @@ if __name__ == "__main__":
                                     number_level_part=part, num_layers=3)
     else:
         print('Model_type: BiPointMask')
-        model = SCI_Point_Mask(args, num_classes=args.slide_win, input_len=args.slide_win, input_dim=3,
+        model = SCI_Point_Mask(args, num_classes=args.slide_win, input_len=args.slide_win, input_dim=args.variate_index,
                                number_levels=len(part),
-                               number_level_part=part, num_layers=3)
+                               number_level_part=part, point_part=args.point_part, num_layers=3)
     print(args)
     model.to(args.device)
     model_save_path = get_save_path()[0]
@@ -555,8 +560,8 @@ if __name__ == "__main__":
         #                   f'SCINetBiSeqRollingScan_{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_mrl{args.seq_mask_range_high}' \
         #                   f'_07_18_215607.pt'
 
-        model_load_path = f'{dir_path}/{subdataset}/{args.dataset}_{args.model_type}_Pretrain2Stack_lradj{args.lradj}_' \
-                          f'{args.slide_win}_h{args.hidden_size}_bt{args.batch}_p{args.pred_len}_07_30_153926.pt',
+        model_load_path = f'I:\\Papers\\AAAI2022anomaly\\TAD_SCINet\\TADib\\ECG_Results\\chfdb_chf01_275_new\\2dim\\' \
+                          f'ecg_BiPointMask_8_Pretrain_2dimNew_group1_lradj3_128_h8_bt32_p32_08_20_215143.pt',
 
         model.load_state_dict(torch.load(model_load_path))
         best_model = model.to(args.device)

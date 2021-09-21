@@ -4,6 +4,8 @@ from scipy.stats import rankdata, iqr, trim_mean
 from sklearn.metrics import f1_score, mean_squared_error
 import numpy as np
 from numpy import percentile
+from sklearn import metrics
+from sklearn.metrics import auc
 
 
 def get_attack_interval(attack): 
@@ -24,8 +26,29 @@ def get_attack_interval(attack):
     # print(heads, tails)
     return res
 
+def calc_point2point(predict, actual):
+    """
+    calculate f1 score by predict and actual.
+
+    Args:
+        predict (np.ndarray): the predict label
+        actual (np.ndarray): np.ndarray
+    """
+    predict = 1*predict
+    actual = np.array(actual).squeeze()
+    TP = np.sum(predict * actual)
+    TN = np.sum((1 - predict) * (1 - actual))
+    FP = np.sum(predict * (1 - actual))
+    FN = np.sum((1 - predict) * actual)
+    precision = TP / (TP + FP + 0.00001)
+    recall = TP / (TP + FN + 0.00001)
+    f1 = 2 * precision * recall / (precision + recall + 0.00001)
+    return f1, precision, recall, TP, TN, FP, FN
+
+
 # calculate F1 scores
 def eval_scores(scores, true_scores, th_steps, return_thresold=False):
+
     padding_list = [0]*(len(true_scores) - len(scores))
     # print(padding_list)
     labels = np.array(true_scores)
@@ -40,6 +63,11 @@ def eval_scores(scores, true_scores, th_steps, return_thresold=False):
     th_vals = np.array(range(th_steps)) * 1.0 / th_steps
     fmeas = [None] * th_steps
     thresholds = [None] * th_steps
+    TPs = []
+    FPs = []
+    Pres = []
+    Recs = []
+
     for i in range(th_steps):
         temp = th_vals[i] * len(scores)
         cur_pred = scores_sorted > th_vals[i] * len(scores)
@@ -49,6 +77,21 @@ def eval_scores(scores, true_scores, th_steps, return_thresold=False):
         temp1 = int(th_vals[i] * len(scores)+1)
         score_index = scores_sorted.tolist().index(int(th_vals[i] * len(scores)+1))
         thresholds[i] = scores[score_index]
+
+        f1, precision, recall, TP, TN, FP, FN = calc_point2point(cur_pred, true_scores)
+        TPR = TP / (TP + FN + 0.00001)
+        FPR = FP / (FP + TN + 0.00001)
+        TPs.append(TPR)
+        FPs.append(FPR)
+        Pres.append(precision)
+        Recs.append(recall)
+
+    AUROC = metrics.auc(FPs, TPs)
+    AUPRC = metrics.auc(Recs, Pres)
+
+    print(f'AUROC : {AUROC}')
+    print(f'AUPRC: {AUPRC}')
+
 
     if return_thresold:
         return fmeas, thresholds

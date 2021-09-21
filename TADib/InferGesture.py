@@ -281,8 +281,8 @@ def calc_point2point(predict, actual):
     TN = np.sum((1 - predict) * (1 - actual))
     FP = np.sum(predict * (1 - actual))
     FN = np.sum((1 - predict) * actual)
-    precision = TP / (TP + FP + 0.00001)
-    recall = TP / (TP + FN + 0.00001)
+    precision = TP / (TP + FP + 0.00001) # 越高代表 FP 越低   被判定为正样本，但事实上是负样本。  正常被误判为异常
+    recall = TP / (TP + FN + 0.00001)  # 越高代表 FN 越低  被判定为负样本，但事实上是正样本。  没检测出异常
     f1 = 2 * precision * recall / (precision + recall + 0.00001)
     return f1, precision, recall, TP, TN, FP, FN
 
@@ -488,6 +488,15 @@ if __name__ == "__main__":
     #                   f'gesture_BiSeqMask_Pretrain2Stack_2dimNew_group1_lradj3_128_h8_bt16_p32_08_18_181531.pt'
     model_load_path = f'{dir_path}/{subdataset}/{args.variate_index}dim/' \
                       f'gesture_BiSeqMask_Pretrain2Stack_2dimNew_group1_lradj3_128_h16_bt16_p32_08_18_212624.pt' #F1 score: 0.6056701030927836
+
+    # dir_path = 'Gesture_TCN_Results'
+    # model_load_path = f'{dir_path}/{subdataset}/{args.variate_index}dim/' \
+    #                   f'gesture_BiSeqMask_Pretrain2Stack_2dimNew_group1_lradj3_128_h16_bt16_p32_08_29_155856.pt'
+    #
+    # dir_path = 'Gesture_GRU_Results'
+    # model_load_path = f'{dir_path}/{subdataset}/{args.variate_index}dim/' \
+    #                   f'gesture_BiSeqMask_Pretrain2Stack_2dimNew_group1_lradj3_128_h16_bt16_p32_08_29_212844.pt'  # F1 score: 0.6056701030927836
+
     print(model_load_path)
     model.load_state_dict(torch.load(model_load_path))
     best_model = model.to(args.device)
@@ -508,13 +517,13 @@ if __name__ == "__main__":
 
 
 #################################################################################################
-    Stride = int(args.slide_win / 4)   # Init F1 score: 0.6835555555555555,Threshods: 3.5172821458808468
-    ActiveWindow = args.slide_win      # finture Initial F1 score: 0.6944721299135557
-    find_threshold = False              # Init F1 score: 0.6934174932371505,Threshods: 3.4998771603924057
+    Stride = int(args.slide_win / 4)
+    ActiveWindow = args.slide_win       # F1 score: 0.6720502467474203
+    find_threshold = False               # Init F1 score: 0.6934174932371505,Threshods: 3.4998771603924057
     variate_num = [0, 1]                # finture Initial F1 score: 0.7658707581885638  precision: 0.961352641524112  recall: 0.6364605475857085
     number = data_dict['test_labels'].shape[0]
     count = -1
-    threshod = 3.4998  # 0.3
+    threshod = 3.4998  # 0.3 #7.3096 #
     threshod_l1 = 0.1
     NewLabels = np.zeros(number)
     TotalLabels = data_dict['test_labels']
@@ -675,19 +684,19 @@ if __name__ == "__main__":
     print(f'Initial precision: {precision}')
     print(f'Initial recall: {recall}\n')
 
-    predict = adjust_predicts(score=TotalLabels, label=TotalLabels,
-                              threshold=0,
-                              pred=NewLabels,
-                              calc_latency=False)
-
-    f1, precision, recall, TP, TN, FP, FN = calc_point2point(predict, TotalLabels)
-
-    print(f'Adjusted F1 score: {f1}')
-    print(f'Adjusted precision: {precision}')
-    print(f'Adjusted recall: {recall}\n')
-    plt.plot(predict * 1.3, '.')
-    plt.plot(TotalLabels, '.')
-    plt.show()
+    # predict = adjust_predicts(score=TotalLabels, label=TotalLabels,
+    #                           threshold=0,
+    #                           pred=NewLabels,
+    #                           calc_latency=False)
+    #
+    # f1, precision, recall, TP, TN, FP, FN = calc_point2point(predict, TotalLabels)
+    #
+    # print(f'Adjusted F1 score: {f1}')
+    # print(f'Adjusted precision: {precision}')
+    # print(f'Adjusted recall: {recall}\n')
+    # plt.plot(predict * 1.3, '.')
+    # plt.plot(TotalLabels, '.')
+    # plt.show()
 
     # _, val_result = test(model, val_dataloader, type=0)
     # _, test_result = infer(model, test_dataloader,

@@ -146,6 +146,9 @@ def get_val_performance_data(total_err_scores, normal_scores, gt_labels, topk=1)
     return f1, pre, rec, auc_score, thresold
 
 
+
+
+
 def get_best_performance_data(total_err_scores, gt_labels, topk=1):
 
     total_features = total_err_scores.shape[0]
