@@ -6,12 +6,13 @@ from torch import nn
 from datasets.dataloader import load_dataset
 import os
 from datasets.SNetDataset import SNetDataset
-
+from tslearn.metrics import dtw
 import time
 import torch.nn.functional as F
-
+import matplotlib.pyplot as plt
 from models.SCINetPWPretrainMask import SCI_Point_Mask
 from models.SCINetBiEvenSeqPretrain import SCIMaskEvenPretrain
+from models.SCINetBiEvenSeqPretrain_Multi import SCIMaskEvenPretrain
 
 from evaluate import get_err_scores, get_best_performance_data, get_val_performance_data, get_full_err_scores
 from torch.utils.data import DataLoader, random_split, Subset
@@ -20,6 +21,7 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 import math
+from sklearn.metrics import f1_score, mean_squared_error
 
 parser = argparse.ArgumentParser()
 
@@ -53,6 +55,7 @@ parser.add_argument('--save_path', type=str, default='ECG_Results')
 parser.add_argument('--pred_len', type=int, default=128)
 parser.add_argument('--seq_mask_range_low', type=int, default=4)
 parser.add_argument('--seq_mask_range_high', type=int, default=4)
+parser.add_argument('--seq_mask_split_part', type=int, default=4)
 
 parser.add_argument('--ensemble', type=int, default=0)
 parser.add_argument('--model_type', type=str, default='BiPointMask')
@@ -156,8 +159,198 @@ def timeSincePlus(since, percent):
     s = now - since
     es = s / (percent)
     rs = es - s
-    return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
+    return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
+def calc_point2point(predict, actual):
+    """
+    calculate f1 score by predict and actual.
+
+    Args:
+        predict (np.ndarray): the predict label
+        actual (np.ndarray): np.ndarray
+    """
+    actual = np.asarray(actual)
+    TP = np.sum(predict * actual)
+    TN = np.sum((1 - predict) * (1 - actual))
+    FP = np.sum(predict * (1 - actual))
+    FN = np.sum((1 - predict) * actual)
+    precision = TP / (TP + FP + 0.00001)
+    recall = TP / (TP + FN + 0.00001)
+    f1 = 2 * precision * recall / (precision + recall + 0.00001)
+    return f1, precision, recall, TP, TN, FP, FN
+
+def adjust_predicts(score, label,
+                    threshold=None,
+                    pred=None,
+                    calc_latency=False):
+    """
+    Calculate adjusted predict labels using given `score`, `threshold` (or given `pred`) and `label`.
+
+    Args:
+        score (np.ndarray): The anomaly score
+        label (np.ndarray): The ground-truth label
+        threshold (float): The threshold of anomaly score.
+            A point is labeled as "anomaly" if its score is lower than the threshold.
+        pred (np.ndarray or None): if not None, adjust `pred` and ignore `score` and `threshold`,
+        calc_latency (bool):
+
+    Returns:
+        np.ndarray: predict labels
+    """
+    if len(score) != len(label):
+        raise ValueError("score and label must have the same length")
+    score = np.asarray(score)
+    label = np.asarray(label)
+    latency = 0
+    if pred is None:
+        predict = score < threshold
+    else:
+        predict = pred
+    actual = label > 0.1
+    anomaly_state = False
+    anomaly_count = 0
+    for i in range(len(score)):
+        if actual[i] and predict[i] and not anomaly_state:
+                anomaly_state = True
+                anomaly_count += 1
+                for j in range(i, 0, -1):
+                    if not actual[j]:
+                        break
+                    else:
+                        if not predict[j]:
+                            predict[j] = True
+                            latency += 1
+
+        elif not actual[i]:
+            anomaly_state = False
+        if anomaly_state:
+            predict[i] = True
+
+    for i in range(len(score)):
+        if actual[i] and predict[i] and not anomaly_state:
+                anomaly_state = True
+                anomaly_count += 1
+                for k in range(i, len(score)-1, 1):
+                    if not actual[k]:
+                        break
+                    else:
+                        if not predict[k]:
+                            predict[k] = True
+
+
+        elif not actual[i]:
+            anomaly_state = False
+        if anomaly_state:
+            predict[i] = True
+
+
+
+    if calc_latency:
+        return predict, latency / (anomaly_count + 1e-4)
+    else:
+        return predict
+
+
+def get_dtw(errors,labels, data_len, length = 128, interval = 32):
+    error = np.array(errors)
+    label = np.array(labels)
+
+
+    min_error = min(error)
+    max_error = max(error)
+    rang = range(length, data_len - interval, interval)
+    fineture_range= np.arange(min_error, max_error,0.1)
+    best_f1 = []
+    Finetunelabel = []
+    Threshold = []
+    for K in fineture_range:
+        finetunelabel = np.zeros(label.shape[0])
+        sc = error>K
+        for k in range(len(error)):
+            if sc[k] > 0:
+                for kk in range(rang[k],rang[k]+interval,1):
+                    finetunelabel[kk] = 1
+
+        best_f1.append(f1_score(finetunelabel, label))
+        Finetunelabel.append(finetunelabel)
+        Threshold.append(K)
+
+    best_f1_final = np.max(best_f1)
+    best_f1_final_index = np.where(best_f1==np.max(best_f1))
+    best_Threshold = Threshold[int(best_f1_final_index[0][0])]
+    print(f'Init F1 score: {best_f1_final},Threshods: {best_Threshold}')
+
+    pred_labels = Finetunelabel[int(best_f1_final_index[0][0])]
+
+    # max(final_topk_fmeas), pre, rec, auc_score, thresold, pred_labels
+    predict = adjust_predicts(score=label, label=label,
+                              threshold=0,
+                              pred=pred_labels,
+                              calc_latency=False)
+
+    f1, precision, recall, TP, TN, FP, FN = calc_point2point(predict, label)
+    print(f'Seq F1 score: {f1}')
+    print(f'Seq precision: {precision}')
+    print(f'Seq recall: {recall}\n')
+
+    # plt.plot(rang, error)
+    plt.plot(label*5,'.')
+    plt.plot(pred_labels * 6,'.')
+    plt.show()
+
+def smooth(x, window_len=11, window='hanning'):
+    """smooth the data using a window with requested size.
+
+    This method is based on the convolution of a scaled window with the signal.
+    The signal is prepared by introducing reflected copies of the signal
+    (with the window size) in both ends so that transient parts are minimized
+    in the begining and end part of the output signal.
+
+    input:
+        x: the input signal
+        window_len: the dimension of the smoothing window; should be an odd integer
+        window: the type of window from 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'
+            flat window will produce a moving average smoothing.
+
+    output:
+        the smoothed signal
+
+    example:
+
+    t=linspace(-2,2,0.1)
+    x=sin(t)+randn(len(t))*0.1
+    y=smooth(x)
+
+    see also:
+
+    numpy.hanning, numpy.hamming, numpy.bartlett, numpy.blackman, numpy.convolve
+    scipy.signal.lfilter
+
+    TODO: the window parameter could be the window itself if an array instead of a string
+    NOTE: length(output) != length(input), to correct this: return y[(window_len/2-1):-(window_len/2)] instead of just y.
+    """
+
+    # if x.ndim != 1:
+    #     raise ValueError, "smooth only accepts 1 dimension arrays."
+    #
+    # if x.size < window_len:
+    #     raise ValueError, "Input vector needs to be bigger than window size."
+    #
+    # if window_len < 3:
+    #     return x
+    #
+    # if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
+    #     raise ValueError, "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'"
+
+    s = np.r_[x[window_len - 1:0:-1], x, x[-2:-window_len - 1:-1]]
+    # print(len(s))
+    if window == 'flat':  # moving average
+        w = np.ones(window_len, 'd')
+    else:
+        w = eval('np.' + window + '(window_len)')
+
+    y = np.convolve(w / w.sum(), s, mode='valid')
+    return y
 
 def train(model=None, save_path=None, config={}, train_dataloader=None, val_dataloader=None, test_dataloader=None):
     seed = config['seed']
@@ -469,11 +662,12 @@ if __name__ == "__main__":
 
     args.save_path = 'Power_Results'
     args.variate_index = 1
-    args.slide_win = 128
+    args.slide_win = 512
     args.slide_stride = 2
-    args.hidden_size = 16
+    args.hidden_size = 64
     # args.batch = 32
-    args.pred_len = int(args.slide_win/4)
+    # args.pred_len = int(args.slide_win/4)
+    args.seq_mask_split_part = 8
 
     args.model_type = 'BiSeqMask'
 
@@ -487,8 +681,8 @@ if __name__ == "__main__":
     if args.model_type == 'BiSeqMask':
         print('Model_type: BiSeqMask')
         model = SCIMaskEvenPretrain(args, input_len=args.slide_win,
-                                    seq_mask_range_ratio=[args.seq_mask_range_low, args.seq_mask_range_high],
-                                    pred_len=[args.pred_len, args.pred_len],
+                                    seq_mask_range_ratio=[args.seq_mask_split_part, args.seq_mask_split_part],
+                                    pred_len=[int(args.slide_win/args.seq_mask_split_part), int(args.slide_win/args.seq_mask_split_part)],
                                     input_dim=args.variate_index,
                                     number_levels=len(part),
                                     number_level_part=part, num_layers=3)
@@ -547,12 +741,12 @@ if __name__ == "__main__":
 
     else:
 
-        args.slide_win = 128
-        args.slide_stride = 2
-        args.hidden_size = 16
-        args.batch = 32
-        args.pred_len = 32
-        args.model_type = 'BiSeqMask'
+        # args.slide_win = 168
+        # args.slide_stride = 2
+        # args.hidden_size = 16
+        # # args.batch = 32
+        # args.pred_len = int(args.slide_win/4)
+        # args.model_type = 'BiSeqMask'
 
         cfg = {
             'slide_win': args.slide_win,
@@ -586,7 +780,7 @@ if __name__ == "__main__":
         dir_path = args.save_path
 
         model_load_path = f'{dir_path}/{subdataset}/{args.variate_index}dim/' \
-                          f'gesture_BiSeqMask_Pretrain2Stack_2dimNew_group1_lradj3_128_h16_bt16_p32_08_18_212624.pt'  # F1 score: 0.6056701030927836
+                          f'power_demand_BiSeqMask_Pretrain_1dimNew_group1_lradj3_128_h16_bt16_p32_09_21_200729.pt'  # F1 score: 0.6056701030927836
 
 
         print(model_load_path)
@@ -608,11 +802,10 @@ if __name__ == "__main__":
         model.eval()
 
         #################################################################################################
-        Stride = int(args.slide_win / 4)
-        ActiveWindow = args.slide_win  # F1 score: 0.6720502467474203
-        find_threshold = False  # Init F1 score: 0.6934174932371505,Threshods: 3.4998771603924057
-        variate_num = [0,
-                       1]  # finture Initial F1 score: 0.7658707581885638  precision: 0.961352641524112  recall: 0.6364605475857085
+        Stride = int(args.slide_win / args.seq_mask_split_part)
+        ActiveWindow = args.slide_win
+        find_threshold = True
+        variate_num = [0]
         number = data_dict['test_labels'].shape[0]
         count = -1
         threshod = 3.4998  # 0.3 #7.3096 #
@@ -622,6 +815,7 @@ if __name__ == "__main__":
         anomaly = np.where(TotalLabels == 1)[0]
         enter = False
         phi = 1
+        psi = 1
         ERRORS = []
         for x, y, labels in test_dataloader:
             x, y, labels = [item.to(device).float() for item in [x, y, labels]]
@@ -712,7 +906,7 @@ if __name__ == "__main__":
                                 NewLabels[End - Stride:  End - Stride + p] = 0
 
                     #
-                    elif error_type < 1.0 * threshod:
+                    elif error_type < psi * threshod:
                         if enter == True:  # outlier
                             print(
                                 "Error Exit,{0}".format(error_type))  # [///////////[//]...][AAAAA][AAAAA][AAAAA][AAAAA]
@@ -766,7 +960,7 @@ if __name__ == "__main__":
                         print("Intermediate zone Error Exit,{0}".format(error_type))
                     # threshod = dist_ts
         if find_threshold:
-            get_dtw(ERRORS, data_dict['test_labels'], 44900, interval=32)
+            get_dtw(ERRORS, data_dict['test_labels'], 100000, length = args.slide_win, interval=int(args.slide_win/args.seq_mask_split_part))
         plt.plot(ERRORS, color='r')
         plt.plot(NewLabels * 1.2, '.')
         plt.plot(TotalLabels, '.')
