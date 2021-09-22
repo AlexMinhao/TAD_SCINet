@@ -664,8 +664,8 @@ if __name__ == "__main__":
     args.variate_index = 1
     args.slide_win = 512
     args.slide_stride = 2
-    args.hidden_size = 64
-    # args.batch = 32
+    args.hidden_size = 8
+    args.batch = 32
     # args.pred_len = int(args.slide_win/4)
     args.seq_mask_split_part = 8
 
@@ -751,8 +751,8 @@ if __name__ == "__main__":
         cfg = {
             'slide_win': args.slide_win,
             'slide_stride': args.slide_stride,
-            'test_slide_win': int(args.slide_win + args.slide_win / 4),
-            'test_slide_stride': int(args.slide_win / 4),
+            'test_slide_win': int(args.slide_win + args.slide_win / args.seq_mask_split_part),
+            'test_slide_stride': int(args.slide_win / args.seq_mask_split_part),
         }
 
         train_config = {
@@ -891,7 +891,7 @@ if __name__ == "__main__":
 
                         pos = []
                         for j, error in enumerate(enumDtwError):
-                            if error < 0.4 * phi * threshod:
+                            if error < phi * threshod:
                                 pos.append(j)
 
                         if len(pos) == 0:
