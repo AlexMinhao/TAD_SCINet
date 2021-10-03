@@ -243,7 +243,7 @@ def train(model=None, save_path=None, config={}, train_dataloader=None, val_data
             )
 
             if val_loss < min_loss:
-                if i_epoch > 2:
+                if i_epoch > 10:
                     _, test_result = test(model, test_dataloader,
                                           type=2)  # avg_loss, [test_predicted_list, test_ground_list, test_labels_list] 2034*27
                     get_score(test_result, test_result)
@@ -472,11 +472,11 @@ if __name__ == "__main__":
     torch.backends.cudnn.enabled = True
     # 'machine-1-1'
     args.dataset = 'credit'  # chfdb_chf13_45590   chfdbchf15   ltstdb_20221_43  ltstdb_20321_240   mitdb__100_180
-    subdataset = 'NEW920_20'
+    subdataset = '1003'
     if args.dataset == 'credit':
         args.save_path = 'Credit_Results'
         args.variate_index = 3
-        args.slide_win = 32  # 256
+        args.slide_win = 128  # 256
         args.slide_stride = 64
         args.hidden_size = 2
         args.batch = 16
@@ -486,7 +486,7 @@ if __name__ == "__main__":
         args.point_part = 4
         args.model_type = 'BiPointMask'  # BiPointMask'#'BiSeqMask'
 
-        args.epoch = 15
+        # args.epoch = 15
 
     data_dict = load_dataset(args.dataset, subdataset=subdataset, use_dim="all", root_dir="/", nrows=None)
 
