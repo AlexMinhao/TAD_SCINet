@@ -632,7 +632,7 @@ class SCI_Point_Mask(nn.Module):
         b, l, c = x.shape
         point_processed_x = torch.zeros(b, l, c, device=x.device)
 
-        point_mask_x, point_mask = self.creatMaskEvenSplit(x, part = self.point_part)
+        point_mask_x, point_mask = self.creatMaskEvenSplit1(x, part = self.point_part)
 
 
 
@@ -648,7 +648,10 @@ class SCI_Point_Mask(nn.Module):
         #
         temp4 = point_processed_x.detach().cpu().numpy()
         point_processed_x = self.projection(point_processed_x)
-        #
+
+        # point_processed_x = self.blocks[0](x)
+        # point_processed_x = self.projection(point_processed_x)
+
 
 
         return point_processed_x

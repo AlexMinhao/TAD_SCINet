@@ -28,7 +28,7 @@ import math
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--batch', help='batch size', type=int, default=16)
-parser.add_argument('--epoch', help='train epoch', type=int, default=30)
+parser.add_argument('--epoch', help='train epoch', type=int, default=15)
 parser.add_argument('--learning_rate', help='lr', type=float, default=0.001)
 
 parser.add_argument('--slide_win', help='slide_win', type=int, default=168)
@@ -243,7 +243,7 @@ def train(model=None, save_path=None, config={}, train_dataloader=None, val_data
             )
 
             if val_loss < min_loss:
-                if i_epoch > 10:
+                if i_epoch > 2:
                     _, test_result = test(model, test_dataloader,
                                           type=2)  # avg_loss, [test_predicted_list, test_ground_list, test_labels_list] 2034*27
                     get_score(test_result, test_result)
@@ -330,6 +330,7 @@ def test(model, dataloader, type=0):
 
         if i % 10000 == 1 and i > 1:
             print(timeSincePlus(now, i / test_len))
+    Total_Time = time.time() - now
 
     # t_test_predicted_list=t_test_predicted_list.permute(0,2,1)
     data_dim = t_test_predicted_list.shape[2]
@@ -357,6 +358,8 @@ def test(model, dataloader, type=0):
 
 
     elif type == 2:
+        print('Total_infer_time', Total_Time)
+
         folder_path = args.save_path
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
@@ -473,17 +476,17 @@ if __name__ == "__main__":
     if args.dataset == 'credit':
         args.save_path = 'Credit_Results'
         args.variate_index = 3
-        args.slide_win = 128  # 256
+        args.slide_win = 32  # 256
         args.slide_stride = 64
-        # args.hidden_size = 2
-        # args.batch = 16
+        args.hidden_size = 2
+        args.batch = 16
         # args.pred_len = 64  # 64
         # args.seq_mask_range_low = 4
         # args.seq_mask_range_high = 4
-        # args.point_part = 4
+        args.point_part = 4
         args.model_type = 'BiPointMask'  # BiPointMask'#'BiSeqMask'
 
-        args.epoch = 30
+        args.epoch = 15
 
     data_dict = load_dataset(args.dataset, subdataset=subdataset, use_dim="all", root_dir="/", nrows=None)
 
@@ -533,7 +536,7 @@ if __name__ == "__main__":
                                number_levels=len(part),
                                number_level_part=part, point_part=args.point_part, num_layers=3)
 
-        # model = RecurrentAutoencoder(args.slide_win, args.variate_index, 6, args.device)
+        # model = RecurrentAutoencoder(args.slide_win, args.variate_index, 2, args.device)
     print(args)
     model.to(args.device)
     model_save_path = get_save_path()[0]
